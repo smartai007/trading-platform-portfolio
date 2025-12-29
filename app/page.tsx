@@ -10,9 +10,7 @@ import { toast } from "sonner"
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
-
 export default function PortfolioPage() {
-
   const [symbol, setSymbol] = useState<string>("")
   const [quantity, setQuantity] = useState<number>(0)
   const [accounts, setAccounts] = useState<any[]>([])
@@ -148,7 +146,7 @@ export default function PortfolioPage() {
   const handleBuyAllPositions = () => {
     showConfirmationModal(
       "Confirm Buy All Positions",
-      "Are you sure you want to buy positions for all accounts? This action cannot be undone.",
+      "Are you sure you want to buy positions for all accounts? This action cannot be unDONE.",
       buyAllPositions,
       "Buy All",
       "Cancel"
