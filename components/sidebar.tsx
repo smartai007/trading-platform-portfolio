@@ -47,15 +47,15 @@ export function Sidebar() {
   const [isMobileOpen, setIsMobileOpen] = useState(false)
   const { user, logout } = useAuth()
 
-  // Hide sidebar on auth pages
-  if (pathname === '/signin' || pathname === '/signup') {
-    return null
-  }
-
   // Close mobile sidebar when route changes
   useEffect(() => {
     setIsMobileOpen(false)
   }, [pathname])
+
+  // Hide sidebar on auth pages
+  if (pathname === '/signin' || pathname === '/signup') {
+    return null
+  }
 
   // Get user initials
   const getInitials = () => {

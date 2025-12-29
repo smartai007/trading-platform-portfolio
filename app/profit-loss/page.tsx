@@ -3,7 +3,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { TrendingUp, TrendingDown, DollarSign, Percent } from "lucide-react"
-import { Line, LineChart, Bar, BarChart, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend } from "recharts"
+import { Line, LineChart, Bar, BarChart, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend, Cell } from "recharts"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
@@ -40,17 +40,27 @@ export default function ProfitLossPage() {
   const [openPositions, setOpenPositions] = useState<any[]>([])
   const [combinedPositions, setCombinedPositions] = useState<any[]>([])
   const [activeTab, setActiveTab] = useState<"current" | "total">("current")
+  const [historyAll, setHistoryAll] = useState<any[]>([])
+  const [dailyChartData, setDailyChartData] = useState<Record<string, any[]>>({})
 
   useEffect(() => {
     getAccounts()
   }, [])
 
   const getAccounts = async () => {
-    const res = await fetch(`${BACKEND_URL}/historypnl`, {
+    const res = await fetch(`${BACKEND_URL}/historypnldaily`, {
     })
     const response = await res.json()
     const accounts = response.portfolio
     const history = response.history
+    const historyAll = response.historyAll
+    console.log('historyAll : ', historyAll)
+    
+    // Process historyAll for daily chart
+    if (historyAll && Array.isArray(historyAll)) {
+      setHistoryAll(historyAll)
+      processDailyChartData(historyAll)
+    }
     
     if (accounts) {
       const data = accounts
@@ -81,7 +91,7 @@ export default function ProfitLossPage() {
           const historyEntry = history?.find((h: any) => h["account Number"] === accountId)
           // Calculate difference: history value (Exit Price) - totalMarketValue
           const historyValue = historyEntry ? (historyEntry["Exit Price"] || 0) : 0
-          const difference = historyValue - totalMarketValue
+          const difference =  totalMarketValue - historyValue
           const detailedAccount = {
             account: accountId,
             NetLiquidation: accountData.NetLiquidation,
@@ -104,6 +114,69 @@ export default function ProfitLossPage() {
       setOpenPositions(data.positions || [])
     }
   }
+
+  const processDailyChartData = (historyData: any[]) => {
+    // Group data by account and date
+    const accountDateMap: Record<string, Record<string, { totalPL: number; count: number }>> = {}
+    
+    historyData.forEach((entry: any) => {
+      // Extract account identifier - check common field names
+      const accountId = entry.account || entry["account Number"] || entry.Account || "Unknown"
+      
+      // Use Entry Date for grouping by day
+      const entryDate = entry["Entry Date"] || entry.EntryDate || entry.entryDate
+      if (!entryDate) return
+      
+      // Parse date and get YYYY-MM-DD format
+      const dateObj = new Date(entryDate)
+      const dateKey = dateObj.toISOString().split('T')[0]
+      
+      // Calculate P&L: Exit Price - Entry Price
+      const entryPrice = parseFloat(entry["Entry Price"] || entry.EntryPrice || entry.entryPrice || 0)
+      const exitPrice = parseFloat(entry["Exit Price"] || entry.ExitPrice || entry.exitPrice || 0)
+      const pl = exitPrice - entryPrice
+      
+      // Initialize account if not exists
+      if (!accountDateMap[accountId]) {
+        accountDateMap[accountId] = {}
+      }
+      
+      // Initialize date if not exists
+      if (!accountDateMap[accountId][dateKey]) {
+        accountDateMap[accountId][dateKey] = { totalPL: 0, count: 0 }
+      }
+      
+      // Accumulate P&L for this account and date
+      accountDateMap[accountId][dateKey].totalPL += pl
+      accountDateMap[accountId][dateKey].count += 1
+    })
+    
+    // Create separate chart data for each account
+    const accountChartData: Record<string, any[]> = {}
+    
+    Object.keys(accountDateMap).forEach((accountId) => {
+      const dateMap = accountDateMap[accountId]
+      const sortedDates = Object.keys(dateMap).sort()
+      
+      // Calculate cumulative P&L for this account
+      let cumulativePL = 0
+      const chartData = sortedDates.map((date) => {
+        const dailyPL = dateMap[date].totalPL
+        cumulativePL += dailyPL
+        
+        return {
+          date: date,
+          pl: parseFloat(dailyPL.toFixed(2)),
+          cumulativePL: parseFloat(cumulativePL.toFixed(2))
+        }
+      })
+      
+      accountChartData[accountId] = chartData
+    })
+    
+    setDailyChartData(accountChartData)
+  }
+
   const totalPL = metrics[0].value + metrics[1].value
   const totalChange = (totalPL / (totalPL - metrics[0].value * (metrics[0].change / 100)) - 1) * 100
 
@@ -146,7 +219,109 @@ export default function ProfitLossPage() {
                 No accounts found
               </div>
             ) : (
-              accounts.map((account) => {
+              <>
+                {/* Profit/Loss Chart for All Accounts */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Daily Profit/Loss by Account</CardTitle>
+                    <CardDescription>
+                      Current profit and loss for each account
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {(() => {
+                      const chartData = accounts
+                        .filter((account) => account.positions && account.positions.length > 0)
+                        .map((account) => ({
+                          account: account.account,
+                          profitLoss: parseFloat((account.difference || 0).toFixed(2)),
+                        }))
+                      
+                      return (
+                        <ChartContainer
+                          config={{
+                            profitLoss: {
+                              label: "Profit/Loss",
+                              color: "hsl(var(--chart-1))",
+                            },
+                          }}
+                          className="h-[400px] w-full"
+                        >
+                          <BarChart data={chartData}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis
+                              dataKey="account"
+                              angle={-45}
+                              textAnchor="end"
+                              height={100}
+                            />
+                            <YAxis
+                              tickFormatter={(value) => `$${value.toLocaleString()}`}
+                            />
+                            <ChartTooltip
+                              content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                  const value = payload[0].value as number
+                                  return (
+                                    <div className="rounded-lg border bg-background p-2 shadow-sm">
+                                      <div className="grid gap-2">
+                                        <div className="font-medium">
+                                          {payload[0].payload.account}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <div
+                                            className="h-2.5 w-2.5 rounded-full"
+                                            style={{ backgroundColor: payload[0].color }}
+                                          />
+                                          <span className="text-sm text-muted-foreground">
+                                            Profit/Loss:
+                                          </span>
+                                          <span
+                                            className={cn(
+                                              "font-medium",
+                                              value >= 0
+                                                ? "text-emerald-600 dark:text-emerald-400"
+                                                : "text-rose-600 dark:text-rose-400"
+                                            )}
+                                          >
+                                            {value >= 0 ? '+' : ''}
+                                            ${value.toLocaleString('en-US', {
+                                              minimumFractionDigits: 2,
+                                              maximumFractionDigits: 2,
+                                            })}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )
+                                }
+                                return null
+                              }}
+                            />
+                            <Bar
+                              dataKey="profitLoss"
+                              radius={[4, 4, 0, 0]}
+                            >
+                              {chartData.map((entry, index) => (
+                                <Cell
+                                  key={`cell-${index}`}
+                                  fill={
+                                    entry.profitLoss >= 0
+                                      ? "hsl(142, 76%, 36%)" // emerald-600
+                                      : "hsl(0, 72%, 51%)" // rose-600
+                                  }
+                                />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ChartContainer>
+                      )
+                    })()}
+                  </CardContent>
+                </Card>
+
+                {/* Account Cards */}
+                {accounts.map((account) => {
                 // Only show accounts that have positions
                 if (!account.positions || account.positions.length === 0) {
                   return null
@@ -161,13 +336,13 @@ export default function ProfitLossPage() {
                           Total Cash Value: {account.TotalCashValue?.currency || 'USD'} {parseFloat(account.TotalCashValue?.value || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                         <span className={account.difference >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}>
-                          Profit/Loss: {account.difference >= 0 ? '+' : '-'} ${account.difference.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          Profit/Loss: {account.difference >= 0 ? '+' : '-'} ${Math.abs(account.difference).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-3">
-                        <h3 className="font-semibold text-sm mb-2">Positions:</h3>
+                        <h3 className="font-semibold text-sm mb-2">POSITIONS:</h3>
                         {account.positions.map((position: any, index: number) => (
                           <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
                             <div>
@@ -182,6 +357,7 @@ export default function ProfitLossPage() {
                               </div>
                               {position.marketValue !== undefined && (
                                 <div className="text-sm text-muted-foreground">
+                                  
                                   Market Value: {position.currency || 'USD'} {parseFloat(position.marketValue || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </div>
                               )}
@@ -192,14 +368,135 @@ export default function ProfitLossPage() {
                     </CardContent>
                   </Card>
                 )
-              })
+              })}
+              </>
             )}
           </div>
         )}
         
         {activeTab === "total" && (
-          <div>
-            {/* Total Page Content */}
+          <div className="space-y-6">
+            {Object.keys(dailyChartData).length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No historical data available
+              </div>
+            ) : (
+              Object.keys(dailyChartData).map((accountId) => {
+                const chartData = dailyChartData[accountId]
+                if (!chartData || chartData.length === 0) return null
+                
+                const lastDataPoint = chartData[chartData.length - 1]
+                const totalPL = lastDataPoint.cumulativePL || 0
+                
+                return (
+                  <Card key={accountId}>
+                    <CardHeader>
+                      <CardTitle className="text-red-600">{accountId}</CardTitle>
+                      <CardDescription>
+                        <span
+                          className={cn(
+                            "text-lg font-semibold",
+                            totalPL >= 0
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-rose-600 dark:text-rose-400"
+                          )}
+                        >
+                          Total P/L: {totalPL >= 0 ? '+' : ''}
+                          ${totalPL.toLocaleString('en-US', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </span>
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ChartContainer
+                        config={{
+                          pl: {
+                            label: "Daily P/L",
+                            color: "hsl(var(--chart-1))",
+                          },
+                          cumulativePL: {
+                            label: "Cumulative P/L",
+                            color: "hsl(var(--chart-2))",
+                          },
+                        }}
+                        className="h-[400px] w-full"
+                      >
+                        <LineChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis
+                            dataKey="date"
+                            tickFormatter={(value) => {
+                              const date = new Date(value)
+                              return `${date.getMonth() + 1}/${date.getDate()}`
+                            }}
+                          />
+                          <YAxis
+                            tickFormatter={(value) => `$${value.toLocaleString()}`}
+                          />
+                          <ChartTooltip
+                            content={({ active, payload }) => {
+                              if (active && payload && payload.length) {
+                                return (
+                                  <div className="rounded-lg border bg-background p-2 shadow-sm">
+                                    <div className="grid gap-2">
+                                      <div className="font-medium">
+                                        {payload[0]?.payload?.date
+                                          ? new Date(payload[0].payload.date).toLocaleDateString()
+                                          : ''}
+                                      </div>
+                                      {payload.map((entry: any, index: number) => {
+                                        const value = entry.value || 0
+                                        return (
+                                          <div key={index} className="flex items-center gap-2">
+                                            <div
+                                              className="h-2.5 w-2.5 rounded-full"
+                                              style={{ backgroundColor: entry.color }}
+                                            />
+                                            <span className="text-sm text-muted-foreground">
+                                              {entry.name}:
+                                            </span>
+                                            <span
+                                              className={cn(
+                                                "font-medium",
+                                                value >= 0
+                                                  ? "text-emerald-600 dark:text-emerald-400"
+                                                  : "text-rose-600 dark:text-rose-400"
+                                              )}
+                                            >
+                                              ${value.toLocaleString('en-US', {
+                                                minimumFractionDigits: 2,
+                                                maximumFractionDigits: 2,
+                                              })}
+                                            </span>
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
+                                  </div>
+                                )
+                              }
+                              return null
+                            }}
+                          />
+                          <Legend />
+                          <Line
+                            type="monotone"
+                            dataKey="cumulativePL"
+                            stroke="hsl(var(--chart-2))"
+                            strokeWidth={2}
+                            dot={{ r: 3 }}
+                            activeDot={{ r: 5 }}
+                            name="Cumulative P/L"
+                          />
+                        </LineChart>
+                      </ChartContainer>
+                    </CardContent>
+                  </Card>
+                )
+              })
+            )}
           </div>
         )}
       </div>

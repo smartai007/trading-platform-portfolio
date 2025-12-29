@@ -55,7 +55,7 @@ export default function PortfolioPage() {
   }
 
   const getAccounts = async () => {
-    const res = await fetch(`${BACKEND_URL}/historypnl`, {
+    const res = await fetch(`${BACKEND_URL}/historypnldaily`, {
     })
     const response = await res.json()
     const accounts = response.portfolio
@@ -90,7 +90,7 @@ export default function PortfolioPage() {
           const historyEntry = history?.find((h: any) => h["account Number"] === accountId)
           // Calculate difference: history value (Exit Price) - totalMarketValue
           const historyValue = historyEntry ? (historyEntry["Exit Price"] || 0) : 0
-          const difference = historyValue - totalMarketValue
+          const difference = totalMarketValue - historyValue
           const detailedAccount = {
             account: accountId,
             NetLiquidation: accountData.NetLiquidation,
@@ -483,7 +483,7 @@ export default function PortfolioPage() {
                           </div>
                           <div className="text-right">
                           <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Profit/Loss</Label>
-                            <p className="text-lg sm:text-xl font-bold text-foreground">{position.difference >= 0 ? '+' : '-'} ${position.difference.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                            <p className="text-lg sm:text-xl font-bold text-foreground">{position.difference >= 0 ? '+' : '-'} ${Math.abs(position.difference).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                           </div>
                           <div className="text-right">
                             <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Holdings</Label>
