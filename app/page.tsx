@@ -431,7 +431,7 @@ export default function PortfolioPage() {
 
         {/* Stats Cards */}
         <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-          <Card className="border-border/50 shadow-lg bg-gradient-to-br from-card to-card/80 backdrop-blur-sm hover:shadow-xl transition-shadow">
+          {/* <Card className="border-border/50 shadow-lg bg-gradient-to-br from-card to-card/80 backdrop-blur-sm hover:shadow-xl transition-shadow">
             <CardHeader className="pb-4 sm:pb-6 space-y-2">
               <CardDescription className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wide">
                 Total Portfolio Value
@@ -440,7 +440,7 @@ export default function PortfolioPage() {
                 ${totalValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </CardTitle>
             </CardHeader>
-          </Card>
+          </Card> */}
 
           <Card className="border-border/50 shadow-lg bg-gradient-to-br from-card to-card/80 backdrop-blur-sm hover:shadow-xl transition-shadow">
             <CardHeader className="pb-4 sm:pb-6 space-y-2">

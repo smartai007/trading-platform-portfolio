@@ -19,11 +19,11 @@ const navigation = [
   //   href: "/limit-order",
   //   icon: LayoutDashboard,
   // },
-  {
-    name : "Strategy Management",
-    href: "/strategy-management",
-    icon: LayoutDashboard,
-  },
+  // {
+  //   name : "Strategy Management",
+  //   href: "/strategy-management",
+  //   icon: LayoutDashboard,
+  // },
   {
     name: "AI News",
     href: "/ai-news",
@@ -34,11 +34,11 @@ const navigation = [
   //   href: "/profit-loss",
   //   icon: TrendingUp,
   // },
-  {
-    name: "Alerts",
-    href: "/alerts",
-    icon: Bell,
-  },
+  // {
+  //   name: "Alerts",
+  //   href: "/alerts",
+  //   icon: Bell,
+  // },
 ]
 
 export function Sidebar() {
