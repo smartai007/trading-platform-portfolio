@@ -8,9 +8,26 @@ import { ArrowUpRight, ArrowDownRight, X, AlertTriangle } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+// const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+const BACKEND_URL = "https://f657778c48c0.ngrok-free.app";
+// const BACKEND_URL = "https://freedomtracker.net";
+
+// Helper function to get headers with conditional ngrok support
+const getHeaders = (): Record<string, string> => {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  }
+  
+  // ngrok free tier requires this header to skip the browser warning page
+  if (BACKEND_URL.includes('ngrok')) {
+    headers["ngrok-skip-browser-warning"] = "true"
+  }
+  
+  return headers
+}
 
 export default function PortfolioPage() {
+
   const [symbol, setSymbol] = useState<string>("")
   const [quantity, setQuantity] = useState<number>(0)
   const [accounts, setAccounts] = useState<any[]>([])
@@ -53,11 +70,37 @@ export default function PortfolioPage() {
   }
 
   const getAccounts = async () => {
-    const res = await fetch(`${BACKEND_URL}/historypnldaily`, {
-    })
-    const response = await res.json()
-    const accounts = response.portfolio
-    const history = response.history
+    console.log("BACKEND_URL🎉🎉🎉 : ", BACKEND_URL)
+    try {
+      const res = await fetch(`${BACKEND_URL}/historypnldaily`, {
+        method: "GET",
+        headers: getHeaders(),
+      })
+      
+      // Read response as text first to check if it's HTML
+      const responseText = await res.text()
+      
+      if (!res.ok) {
+        console.error("HTTP Error Response:", responseText.substring(0, 200))
+        throw new Error(`HTTP error! status: ${res.status}`)
+      }
+      
+      // Check if response is HTML (ngrok warning page)
+      if (responseText.trim().startsWith('<!DOCTYPE') || responseText.trim().startsWith('<html')) {
+        console.error("Received HTML instead of JSON (ngrok warning page):", responseText.substring(0, 500))
+        throw new Error("Received HTML response from ngrok. The ngrok-skip-browser-warning header might not be working. Try: 1) Using ngrok paid tier, 2) Using freedomtracker.net instead, or 3) Check if ngrok tunnel is active.")
+      }
+      
+      // Parse as JSON
+      let response
+      try {
+        response = JSON.parse(responseText)
+      } catch (parseError) {
+        console.error("JSON parse error. Response:", responseText.substring(0, 500))
+        throw new Error("Failed to parse JSON response. Received: " + responseText.substring(0, 100))
+      }
+      const accounts = response.portfolio
+      const history = response.history
     
     if (accounts) {
       const data = accounts
@@ -82,7 +125,7 @@ export default function PortfolioPage() {
       if (data.account_summary) {
         Object.entries(data.account_summary).forEach(([accountId, accountData]: [string, any]) => {
           const accountPositions = positionsByAccount[accountId] || []
-          const totalMarketValue = accountData.TotalCashValue.value
+          const totalMarketValue = accountData.NetLiquidation.value
           
           // Find matching history entry for this account
           const historyEntry = history?.find((h: any) => h["account Number"] === accountId)
@@ -110,6 +153,10 @@ export default function PortfolioPage() {
       setAccounts(detailedAccounts)
       setOpenPositions(data.positions || [])
     }
+    } catch (error) {
+      console.error("Error fetching accounts:", error)
+      toast.error(`Failed to fetch accounts: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
   }
 
   const buyAllPositions = async () => {
@@ -129,9 +176,7 @@ export default function PortfolioPage() {
 
     const res = await fetch(`${BACKEND_URL}/futuresignal`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: getHeaders(),
       body: JSON.stringify(payload),
     })
     if (res.ok) {
@@ -146,7 +191,7 @@ export default function PortfolioPage() {
   const handleBuyAllPositions = () => {
     showConfirmationModal(
       "Confirm Buy All Positions",
-      "Are you sure you want to buy positions for all accounts? This action cannot be unDONE.",
+      "Are you sure you want to buy positions for all accounts? This action cannot be undone.",
       buyAllPositions,
       "Buy All",
       "Cancel"
@@ -171,9 +216,7 @@ export default function PortfolioPage() {
 
     const res = await fetch(`${BACKEND_URL}/futuresignal`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: getHeaders(),
       body: JSON.stringify(payload),
     })
     if (res.ok) {
@@ -206,9 +249,7 @@ export default function PortfolioPage() {
     }
     const res = await fetch(`${BACKEND_URL}/futuresignal`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: getHeaders(),
       body: JSON.stringify(payload),
     })
 
@@ -237,9 +278,7 @@ export default function PortfolioPage() {
   const closeAllPositions = async () => {
     const res = await fetch(`${BACKEND_URL}/closeall`, {
       method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: getHeaders(),
     })
     if (res.ok) {
       const data = await res.json()
@@ -272,9 +311,7 @@ export default function PortfolioPage() {
 
     const res = await fetch(`${BACKEND_URL}/futuresignal`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: getHeaders(),
       body: JSON.stringify(payload),
     })
 
@@ -309,7 +346,7 @@ export default function PortfolioPage() {
     return sum + (acc.difference || 0)
   }, 0)
   const cashBalance = accounts.reduce((sum, acc) => {
-    const cashValue = parseFloat(acc.TotalCashValue?.value || "0")
+    const cashValue = parseFloat(acc.NetLiquidation?.value || "0")
     return sum + cashValue
   }, 0)
 
@@ -476,7 +513,7 @@ export default function PortfolioPage() {
                           <div className="text-right">
                             <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Cash Balance</Label>
                             <p className="text-base sm:text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400">
-                              ${parseFloat(position.TotalCashValue?.value || "0").toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              ${parseFloat(position.NetLiquidation?.value || "0").toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </p>
                           </div>
                           <div className="text-right">

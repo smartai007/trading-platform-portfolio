@@ -86,12 +86,13 @@ export default function ProfitLossPage() {
         Object.entries(data.account_summary).forEach(([accountId, accountData]: [string, any]) => {
           const accountPositions = positionsByAccount[accountId] || []
           const totalMarketValue = accountData.TotalCashValue.value
+          const NetLiquidation = accountData.NetLiquidation.value
           
           // Find matching history entry for this account
           const historyEntry = history?.find((h: any) => h["account Number"] === accountId)
           // Calculate difference: history value (Exit Price) - totalMarketValue
           const historyValue = historyEntry ? (historyEntry["Exit Price"] || 0) : 0
-          const difference =  totalMarketValue - historyValue
+          const difference =  NetLiquidation - historyValue
           const detailedAccount = {
             account: accountId,
             NetLiquidation: accountData.NetLiquidation,
@@ -116,9 +117,10 @@ export default function ProfitLossPage() {
   }
 
   const processDailyChartData = (historyData: any[]) => {
-    // Group data by account and date
-    const accountDateMap: Record<string, Record<string, { totalPL: number; count: number }>> = {}
+    // First, group and sort data by account and date
+    const accountEntriesMap: Record<string, any[]> = {}
     
+    // Group entries by account
     historyData.forEach((entry: any) => {
       // Extract account identifier - check common field names
       const accountId = entry.account || entry["account Number"] || entry.Account || "Unknown"
@@ -131,37 +133,44 @@ export default function ProfitLossPage() {
       const dateObj = new Date(entryDate)
       const dateKey = dateObj.toISOString().split('T')[0]
       
-      // Calculate P&L: Exit Price - Entry Price
-      const entryPrice = parseFloat(entry["Entry Price"] || entry.EntryPrice || entry.entryPrice || 0)
-      const exitPrice = parseFloat(entry["Exit Price"] || entry.ExitPrice || entry.exitPrice || 0)
-      const pl = exitPrice - entryPrice
-      
       // Initialize account if not exists
-      if (!accountDateMap[accountId]) {
-        accountDateMap[accountId] = {}
+      if (!accountEntriesMap[accountId]) {
+        accountEntriesMap[accountId] = []
       }
       
-      // Initialize date if not exists
-      if (!accountDateMap[accountId][dateKey]) {
-        accountDateMap[accountId][dateKey] = { totalPL: 0, count: 0 }
-      }
-      
-      // Accumulate P&L for this account and date
-      accountDateMap[accountId][dateKey].totalPL += pl
-      accountDateMap[accountId][dateKey].count += 1
+      // Store entry with date key and entry price
+      const entryPrice = parseFloat(entry["Entry Price"] || entry.EntryPrice || entry.entryPrice || 0)
+      accountEntriesMap[accountId].push({
+        date: dateKey,
+        entryPrice: entryPrice,
+        timestamp: dateObj.getTime()
+      })
     })
     
     // Create separate chart data for each account
     const accountChartData: Record<string, any[]> = {}
     
-    Object.keys(accountDateMap).forEach((accountId) => {
-      const dateMap = accountDateMap[accountId]
-      const sortedDates = Object.keys(dateMap).sort()
+    Object.keys(accountEntriesMap).forEach((accountId) => {
+      // Sort entries by date (timestamp)
+      const sortedEntries = accountEntriesMap[accountId].sort((a, b) => a.timestamp - b.timestamp)
       
-      // Calculate cumulative P&L for this account
+      // Group by date and get the last entry price for each day
+      const datePriceMap: Record<string, number> = {}
+      sortedEntries.forEach((entry) => {
+        // Use the last entry price for each date (in case of multiple entries per day)
+        datePriceMap[entry.date] = entry.entryPrice
+      })
+      
+      const sortedDates = Object.keys(datePriceMap).sort()
+      
+      // Calculate P&L: current day entry price - previous day entry price
       let cumulativePL = 0
-      const chartData = sortedDates.map((date) => {
-        const dailyPL = dateMap[date].totalPL
+      const chartData = sortedDates.map((date, index) => {
+        const currentEntryPrice = datePriceMap[date]
+        const previousEntryPrice = index > 0 ? datePriceMap[sortedDates[index - 1]] : currentEntryPrice
+        
+        // P/L = current entry price - previous day entry price
+        const dailyPL = currentEntryPrice - previousEntryPrice
         cumulativePL += dailyPL
         
         return {
@@ -175,6 +184,7 @@ export default function ProfitLossPage() {
     })
     
     setDailyChartData(accountChartData)
+    console.log('accountChartData🎉🎉: ', accountChartData)
   }
 
   const totalPL = metrics[0].value + metrics[1].value
@@ -484,11 +494,12 @@ export default function ProfitLossPage() {
                           <Line
                             type="monotone"
                             dataKey="cumulativePL"
-                            stroke="hsl(var(--chart-2))"
-                            strokeWidth={2}
-                            dot={{ r: 3 }}
-                            activeDot={{ r: 5 }}
+                            stroke="#3b82f6"
+                            strokeWidth={2.5}
+                            dot={false}
+                            activeDot={{ r: 6 }}
                             name="Cumulative P/L"
+                            connectNulls={true}
                           />
                         </LineChart>
                       </ChartContainer>

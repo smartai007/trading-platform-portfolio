@@ -29,11 +29,11 @@ const navigation = [
     href: "/ai-news",
     icon: Newspaper,
   },
-  {
-    name: "Profit/Loss",
-    href: "/profit-loss",
-    icon: TrendingUp,
-  },
+  // {
+  //   name: "Profit/Loss",
+  //   href: "/profit-loss",
+  //   icon: TrendingUp,
+  // },
   {
     name: "Alerts",
     href: "/alerts",
