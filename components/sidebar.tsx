@@ -24,11 +24,11 @@ const navigation = [
   //   href: "/strategy-management",
   //   icon: LayoutDashboard,
   // },
-  {
-    name: "AI News",
-    href: "/ai-news",
-    icon: Newspaper,
-  },
+  // {
+  //   name: "AI News",
+  //   href: "/ai-news",
+  //   icon: Newspaper,
+  // },
   // {
   //   name: "Profit/Loss",
   //   href: "/profit-loss",
