@@ -131,7 +131,7 @@ export default function PortfolioPage() {
           const historyEntry = history?.find((h: any) => h["account Number"] === accountId)
           // Calculate difference: history value (Exit Price) - totalMarketValue
           const historyValue = historyEntry ? (historyEntry["Exit Price"] || 0) : 0
-          const difference = totalMarketValue - historyValue
+          const difference = totalMarketValue - 100000
           const detailedAccount = {
             account: accountId,
             NetLiquidation: accountData.NetLiquidation,
