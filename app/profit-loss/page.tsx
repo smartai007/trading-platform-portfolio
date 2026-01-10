@@ -7,6 +7,7 @@ import { Line, LineChart, Bar, BarChart, XAxis, YAxis, CartesianGrid, Responsive
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 
 const performanceData = [
   { date: "Jan", profit: 1250, loss: -450, net: 800 },
@@ -32,7 +33,22 @@ const metrics = [
   { label: "Average Win", value: 1850, change: 5.4, icon: TrendingUp },
 ]
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+// const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+const BACKEND_URL = "https://f657778c48c0.ngrok-free.app";
+
+// Helper function to get headers with conditional ngrok support
+const getHeaders = (): Record<string, string> => {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  }
+  
+  // ngrok free tier requires this header to skip the browser warning page
+  if (BACKEND_URL.includes('ngrok')) {
+    headers["ngrok-skip-browser-warning"] = "true"
+  }
+  
+  return headers
+}
 
 export default function ProfitLossPage() {
 
@@ -48,71 +64,98 @@ export default function ProfitLossPage() {
   }, [])
 
   const getAccounts = async () => {
-    const res = await fetch(`${BACKEND_URL}/historypnldaily`, {
-    })
-    const response = await res.json()
-    const accounts = response.portfolio
-    const history = response.history
-    const historyAll = response.historyAll
-    console.log('historyAll : ', historyAll)
-    
-    // Process historyAll for daily chart
-    if (historyAll && Array.isArray(historyAll)) {
-      setHistoryAll(historyAll)
-      processDailyChartData(historyAll)
-    }
-    
-    if (accounts) {
-      const data = accounts
+    try {
+      const res = await fetch(`${BACKEND_URL}/historypnldaily`, {
+        method: "GET",
+        headers: getHeaders(),
+      })
       
-      // Group positions by account
-      const positionsByAccount: Record<string, any[]> = {}
+      // Read response as text first to check if it's HTML
+      const responseText = await res.text()
       
-      if (data.positions && Array.isArray(data.positions)) {
-        data.positions.forEach((position: any) => {
-          const accountId = position.account
-          if (!positionsByAccount[accountId]) {
-            positionsByAccount[accountId] = []
-          }
-          positionsByAccount[accountId].push(position)
-        })
+      if (!res.ok) {
+        console.error("HTTP Error Response:", responseText.substring(0, 200))
+        throw new Error(`HTTP error! status: ${res.status}`)
       }
       
-      // Create detailed account information array
-      const detailedAccounts: any[] = []
-      
-      // Process each account from account_summary
-      if (data.account_summary) {
-        Object.entries(data.account_summary).forEach(([accountId, accountData]: [string, any]) => {
-          const accountPositions = positionsByAccount[accountId] || []
-          const totalMarketValue = accountData.TotalCashValue.value
-          const NetLiquidation = accountData.NetLiquidation.value
-          
-          // Find matching history entry for this account
-          const historyEntry = history?.find((h: any) => h["account Number"] === accountId)
-          // Calculate difference: history value (Exit Price) - totalMarketValue
-          const historyValue = historyEntry ? (historyEntry["Exit Price"] || 0) : 0
-          const difference =  NetLiquidation - historyValue
-          const detailedAccount = {
-            account: accountId,
-            NetLiquidation: accountData.NetLiquidation,
-            TotalCashValue: accountData.TotalCashValue,
-            positions: accountPositions,
-            totalMarketValue: totalMarketValue,
-            positionCount: accountPositions.length,
-            historyValue: historyValue,
-            difference: difference
-          }
-          
-          detailedAccounts.push(detailedAccount)
-        })
+      // Check if response is HTML (ngrok warning page)
+      if (responseText.trim().startsWith('<!DOCTYPE') || responseText.trim().startsWith('<html')) {
+        console.error("Received HTML instead of JSON (ngrok warning page):", responseText.substring(0, 500))
+        throw new Error("Received HTML response from ngrok. The ngrok-skip-browser-warning header might not be working. Try: 1) Using ngrok paid tier, 2) Using freedomtracker.net instead, or 3) Check if ngrok tunnel is active.")
       }
       
-      console.log('Detailed accounts:', detailedAccounts)
+      // Parse as JSON
+      let response
+      try {
+        response = JSON.parse(responseText)
+      } catch (parseError) {
+        console.error("JSON parse error. Response:", responseText.substring(0, 500))
+        throw new Error("Failed to parse JSON response. Received: " + responseText.substring(0, 100))
+      }
+      const accounts = response.portfolio
+      const history = response.history
+      const historyAll = response.historyAll
       
-      setCombinedPositions(detailedAccounts)
-      setAccounts(detailedAccounts)
-      setOpenPositions(data.positions || [])
+      // Process historyAll for daily chart
+      if (historyAll && Array.isArray(historyAll)) {
+        setHistoryAll(historyAll)
+        processDailyChartData(historyAll)
+      }
+    
+      if (accounts) {
+        const data = accounts
+        
+        // Group positions by account
+        const positionsByAccount: Record<string, any[]> = {}
+        
+        if (data.positions && Array.isArray(data.positions)) {
+          data.positions.forEach((position: any) => {
+            const accountId = position.account
+            if (!positionsByAccount[accountId]) {
+              positionsByAccount[accountId] = []
+            }
+            positionsByAccount[accountId].push(position)
+          })
+        }
+        
+        // Create detailed account information array
+        const detailedAccounts: any[] = []
+        
+        // Process each account from account_summary
+        if (data.account_summary) {
+          Object.entries(data.account_summary).forEach(([accountId, accountData]: [string, any]) => {
+            const accountPositions = positionsByAccount[accountId] || []
+            const totalMarketValue = accountData.TotalCashValue.value
+            const NetLiquidation = accountData.NetLiquidation.value
+            
+            // Find matching history entry for this account
+            const historyEntry = history?.find((h: any) => h["account Number"] === accountId)
+            // Calculate difference: history value (Exit Price) - totalMarketValue
+            const historyValue = historyEntry ? (historyEntry["Exit Price"] || 0) : 0
+            const difference =  NetLiquidation - historyValue
+            const detailedAccount = {
+              account: accountId,
+              NetLiquidation: accountData.NetLiquidation,
+              TotalCashValue: accountData.TotalCashValue,
+              positions: accountPositions,
+              totalMarketValue: totalMarketValue,
+              positionCount: accountPositions.length,
+              historyValue: historyValue,
+              difference: difference
+            }
+            
+            detailedAccounts.push(detailedAccount)
+          })
+        }
+        
+        setCombinedPositions(detailedAccounts)
+        setAccounts(detailedAccounts)
+        console.log('detailedAccounts🎉🎉: ', detailedAccounts)
+        setOpenPositions(data.positions || [])
+      }
+    } catch (error) {
+      console.error("Error fetching accounts:", error)
+      toast.error(`Failed to fetch accounts: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
@@ -184,7 +227,6 @@ export default function ProfitLossPage() {
     })
     
     setDailyChartData(accountChartData)
-    console.log('accountChartData🎉🎉: ', accountChartData)
   }
 
   const totalPL = metrics[0].value + metrics[1].value
@@ -240,12 +282,18 @@ export default function ProfitLossPage() {
                   </CardHeader>
                   <CardContent>
                     {(() => {
-                      const chartData = accounts
-                        .filter((account) => account.positions && account.positions.length > 0)
-                        .map((account) => ({
-                          account: account.account,
-                          profitLoss: parseFloat((account.difference || 0).toFixed(2)),
-                        }))
+                      const chartData = accounts.map((account) => ({
+                        account: account.account,
+                        profitLoss: parseFloat((account.difference || 0).toFixed(2)),
+                      }))
+                      
+                      if (chartData.length === 0) {
+                        return (
+                          <div className="text-center py-8 text-muted-foreground">
+                            No account data available
+                          </div>
+                        )
+                      }
                       
                       return (
                         <ChartContainer
@@ -332,48 +380,51 @@ export default function ProfitLossPage() {
 
                 {/* Account Cards */}
                 {accounts.map((account) => {
-                // Only show accounts that have positions
-                if (!account.positions || account.positions.length === 0) {
-                  return null
-                }
-                
                 return (
                   <Card key={account.account}>
                     <CardHeader>
                       <CardTitle className="text-red-600">{account.account}</CardTitle>
                       <CardDescription className="flex flex-col sm:flex-row sm:items-center sm:gap-4 gap-2">
                         <span>
+                          Net Liquidation: {account.NetLiquidation?.currency || 'USD'} {parseFloat(account.NetLiquidation?.value || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                        <span>
                           Total Cash Value: {account.TotalCashValue?.currency || 'USD'} {parseFloat(account.TotalCashValue?.value || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                         <span className={account.difference >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}>
-                          Profit/Loss: {account.difference >= 0 ? '+' : '-'} ${Math.abs(account.difference).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          Profit/Loss: {account.difference >= 0 ? '+' : ''} ${account.difference.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-3">
-                        <h3 className="font-semibold text-sm mb-2">POSITIONS:</h3>
-                        {account.positions.map((position: any, index: number) => (
-                          <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                            <div>
-                              <span className="font-medium">{position.symbol || 'N/A'}</span>
-                              {position.secType && (
-                                <span className="text-xs text-muted-foreground ml-2">({position.secType})</span>
-                              )}
-                            </div>
-                            <div className="text-right">
-                              <div className="font-semibold">
-                                Position Size: {position.position || '0'}
+                        <h3 className="font-semibold text-sm mb-2">POSITIONS: ({account.positionCount || 0})</h3>
+                        {account.positions && account.positions.length > 0 ? (
+                          account.positions.map((position: any, index: number) => (
+                            <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                              <div>
+                                <span className="font-medium">{position.symbol || 'N/A'}</span>
+                                {position.secType && (
+                                  <span className="text-xs text-muted-foreground ml-2">({position.secType})</span>
+                                )}
                               </div>
-                              {position.marketValue !== undefined && (
-                                <div className="text-sm text-muted-foreground">
-                                  
-                                  Market Value: {position.currency || 'USD'} {parseFloat(position.marketValue || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              <div className="text-right">
+                                <div className="font-semibold">
+                                  Position Size: {position.position || '0'}
                                 </div>
-                              )}
+                                {position.marketValue !== undefined && (
+                                  <div className="text-sm text-muted-foreground">
+                                    Market Value: {position.currency || 'USD'} {parseFloat(position.marketValue || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </div>
+                                )}
+                              </div>
                             </div>
+                          ))
+                        ) : (
+                          <div className="text-center py-4 text-muted-foreground border rounded-lg">
+                            No open positions
                           </div>
-                        ))}
+                        )}
                       </div>
                     </CardContent>
                   </Card>
