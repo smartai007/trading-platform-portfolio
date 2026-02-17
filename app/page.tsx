@@ -342,8 +342,11 @@ export default function PortfolioPage() {
   }, [])
 
   const totalValue = openPositions.reduce((sum, pos) => sum + pos.value, 0)
-  const totalProfitLoss =
-  accounts.reduce((sum, acc) => sum + (acc.difference || 0), 0) - 25000
+  const totalProfitLoss1 = accounts.reduce((sum, acc) => {
+  return sum + (acc.difference || 0)
+}, 0)
+
+const totalProfitLoss = totalProfitLoss1 - 25000
   
   const cashBalance = accounts.reduce((sum, acc) => {
     const cashValue = parseFloat(acc.NetLiquidation?.value || "0")
