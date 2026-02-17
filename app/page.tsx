@@ -342,9 +342,9 @@ export default function PortfolioPage() {
   }, [])
 
   const totalValue = openPositions.reduce((sum, pos) => sum + pos.value, 0)
-  const totalProfitLoss = accounts.reduce((sum, acc) => {
-    return sum + (acc.difference || 0)
-  }, 0)
+  const totalProfitLoss =
+  accounts.reduce((sum, acc) => sum + (acc.difference || 0), 0) - 25000
+  
   const cashBalance = accounts.reduce((sum, acc) => {
     const cashValue = parseFloat(acc.NetLiquidation?.value || "0")
     return sum + cashValue
@@ -465,7 +465,7 @@ export default function PortfolioPage() {
               <CardTitle className={`text-2xl sm:text-3xl lg:text-4xl font-bold font-mono ${
                 totalProfitLoss >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
               }`}>
-                {totalProfitLoss >= 0 ? "+" : ""}${(totalProfitLoss-25000).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {totalProfitLoss >= 0 ? "+" : ""}${totalProfitLoss.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </CardTitle>
             </CardHeader>
           </Card>
