@@ -346,7 +346,7 @@ export default function PortfolioPage() {
     return sum + (acc.difference || 0)
   }, 0)
 
-const totalProfitLoss = totalProfitLoss1 - 25000
+const totalProfitLoss = totalProfitLoss1 - 34214
   
   const cashBalance = accounts.reduce((sum, acc) => {
     const cashValue = parseFloat(acc.NetLiquidation?.value || "0")
