@@ -9,7 +9,7 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 
 // const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
-const BACKEND_URL = "https://f657778c48c0.ngrok-free.app";
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://b534-38-180-242-171.ngrok-free.app"
 // const BACKEND_URL = "https://freedomtracker.net";
 
 // Helper function to get headers with conditional ngrok support
